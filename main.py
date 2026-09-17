@@ -8,26 +8,39 @@ from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, Integer, String, Text
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
-# 1. MariaDB / MySQL Configuration with Environment Variables & Fallback
-MARIADB_USER = os.getenv("MARIADB_USER", "root")
-MARIADB_PASSWORD = os.getenv("MARIADB_PASSWORD", "")
-MARIADB_HOST = os.getenv("MARIADB_HOST", "127.0.0.1")
-MARIADB_PORT = os.getenv("MARIADB_PORT", "3306")
-MARIADB_DB = os.getenv("MARIADB_DATABASE", "fast_crud_db")
+import tempfile
 
-DEFAULT_MARIADB_URL = f"mysql+pymysql://{MARIADB_USER}:{MARIADB_PASSWORD}@{MARIADB_HOST}:{MARIADB_PORT}/{MARIADB_DB}"
-DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_MARIADB_URL)
+# 1. Database Configuration with Environment Variables & Fallback
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-try:
-    if DATABASE_URL.startswith("mysql") or DATABASE_URL.startswith("mariadb"):
-        engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=3600)
-    else:
-        engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-except Exception as e:
-    print(f"MariaDB configuration note: {e}. Falling back to SQLite.")
-    DATABASE_URL = "sqlite:///./app_data.db"
-    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+def get_engine():
+    if DATABASE_URL:
+        if DATABASE_URL.startswith("mysql") or DATABASE_URL.startswith("mariadb"):
+            return create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=3600)
+        return create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+    
+    # If explicit MariaDB environment variables are provided, try connecting
+    if os.getenv("MARIADB_HOST") or os.getenv("MARIADB_DATABASE"):
+        user = os.getenv("MARIADB_USER", "root")
+        password = os.getenv("MARIADB_PASSWORD", "")
+        host = os.getenv("MARIADB_HOST", "127.0.0.1")
+        port = os.getenv("MARIADB_PORT", "3306")
+        db_name = os.getenv("MARIADB_DATABASE", "fast_crud_db")
+        mariadb_url = f"mysql+pymysql://{user}:{password}@{host}:{port}/{db_name}"
+        try:
+            eng = create_engine(mariadb_url, pool_pre_ping=True, pool_recycle=3600, connect_args={"connect_timeout": 3})
+            with eng.connect():
+                pass
+            return eng
+        except Exception as e:
+            print(f"MariaDB connection failed ({e}). Falling back to SQLite.")
 
+    # Fallback to SQLite (uses /tmp directory for Vercel serverless compatibility)
+    db_file = os.path.join(tempfile.gettempdir(), "app_data.db")
+    sqlite_url = f"sqlite:///{db_file}"
+    return create_engine(sqlite_url, connect_args={"check_same_thread": False})
+
+engine = get_engine()
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
