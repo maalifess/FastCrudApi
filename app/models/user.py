@@ -24,7 +24,7 @@ class UserDB(Base):
     # Relationships
     owned_workspaces = relationship("WorkspaceDB", back_populates="owner", lazy="selectin")
     workspace_memberships = relationship("WorkspaceMemberDB", back_populates="user", lazy="selectin")
-    items = relationship("ItemDB", back_populates="owner", lazy="selectin")
+    items = relationship("ItemDB", foreign_keys="[ItemDB.owner_id]", back_populates="owner", lazy="selectin")
 
     def __repr__(self):
         return f"<UserDB(id={self.id}, email='{self.email}')>"

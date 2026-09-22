@@ -4,13 +4,17 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.services.item_service import ItemService
-from app.core.dependencies import get_optional_user
+from app.core.dependencies import get_optional_user, get_current_user
 from app.models.user import UserDB
 from app.schemas.item_schemas import (
     ItemCreate,
     ItemUpdate,
     ItemResponse,
+    PaginatedItemResponse,
     AnalyticsSummary,
+    ItemCommentCreate,
+    ItemCommentResponse,
+    ItemActivityResponse,
 )
 
 router = APIRouter(tags=["Items & Analytics"])
@@ -158,3 +162,43 @@ def force_delete_item(
     if not success:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
     return None
+
+@router.get("/items/{item_id}/comments", response_model=List[ItemCommentResponse])
+def get_comments(
+    item_id: int,
+    current_user: Optional[UserDB] = Depends(get_optional_user),
+    db: Session = Depends(get_db),
+):
+    service = ItemService(db)
+    owner_id = current_user.id if current_user else None
+    item = service.get_by_id(item_id, owner_id=owner_id)
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
+    return service.get_comments(item_id)
+
+@router.post("/items/{item_id}/comments", response_model=ItemCommentResponse, status_code=status.HTTP_201_CREATED)
+def add_comment(
+    item_id: int,
+    comment: ItemCommentCreate,
+    current_user: UserDB = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    service = ItemService(db)
+    owner_id = current_user.id
+    item = service.get_by_id(item_id, owner_id=owner_id)
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
+    return service.add_comment(item_id, current_user.id, comment)
+
+@router.get("/items/{item_id}/activity", response_model=List[ItemActivityResponse])
+def get_activity(
+    item_id: int,
+    current_user: Optional[UserDB] = Depends(get_optional_user),
+    db: Session = Depends(get_db),
+):
+    service = ItemService(db)
+    owner_id = current_user.id if current_user else None
+    item = service.get_by_id(item_id, owner_id=owner_id)
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
+    return service.get_activity(item_id)

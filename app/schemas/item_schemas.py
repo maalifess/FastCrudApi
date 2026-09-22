@@ -19,6 +19,34 @@ class ItemUpdate(BaseModel):
     priority: Optional[str] = None
     due_date: Optional[datetime] = None
     tags: Optional[List[str]] = None
+    assignee_id: Optional[int] = None
+    completed_at: Optional[datetime] = None
+    reminder_at: Optional[datetime] = None
+
+class ItemCommentCreate(BaseModel):
+    text: str = Field(..., min_length=1, max_length=1000)
+
+class ItemCommentResponse(BaseModel):
+    id: int
+    item_id: int
+    user_id: Optional[int] = None
+    text: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ItemActivityResponse(BaseModel):
+    id: int
+    item_id: int
+    user_id: Optional[int] = None
+    action: str
+    details: Optional[Dict] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 class ItemResponse(BaseModel):
     id: int
@@ -29,6 +57,9 @@ class ItemResponse(BaseModel):
     priority: str = "medium"
     due_date: Optional[datetime] = None
     tags: Optional[List[str]] = []
+    assignee_id: Optional[int] = None
+    completed_at: Optional[datetime] = None
+    reminder_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

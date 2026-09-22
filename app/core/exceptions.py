@@ -34,6 +34,8 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
+    import traceback
+    traceback.print_exc()
     if isinstance(exc, IntegrityError):
         return create_error_response(
             code="DATABASE_INTEGRITY_ERROR",

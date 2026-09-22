@@ -4,8 +4,8 @@ from typing import List, Optional, Tuple, Dict, Any
 from sqlalchemy import or_, func, desc, asc
 from sqlalchemy.orm import Session
 
-from app.models.item import ItemDB
-from app.schemas.item_schemas import ItemCreate, ItemUpdate, AnalyticsSummary
+from app.models.item import ItemDB, ItemCommentDB, ItemActivityDB
+from app.schemas.item_schemas import ItemCreate, ItemUpdate, AnalyticsSummary, ItemCommentCreate
 
 class ItemService:
     def __init__(self, db: Session):
@@ -25,6 +25,16 @@ class ItemService:
         query = self.db.query(ItemDB).filter(ItemDB.id == item_id)
         query = self._apply_base_filters(query, owner_id, include_deleted)
         return query.first()
+
+    def log_activity(self, item_id: int, user_id: Optional[int], action: str, details: Optional[Dict[str, Any]] = None):
+        activity = ItemActivityDB(
+            item_id=item_id,
+            user_id=user_id,
+            action=action,
+            details=details
+        )
+        self.db.add(activity)
+        self.db.commit()
 
     def list_items(
         self,
@@ -77,11 +87,14 @@ class ItemService:
             category=data.category or "General",
             status=data.status or "pending",
             priority=data.priority or "medium",
+            due_date=data.due_date,
+            tags=data.tags,
             owner_id=owner_id,
         )
         self.db.add(db_item)
         self.db.commit()
         self.db.refresh(db_item)
+        self.log_activity(db_item.id, owner_id, "created")
         return db_item
 
     def update_item(self, item_id: int, data: ItemUpdate, owner_id: Optional[int] = None) -> Optional[ItemDB]:
@@ -89,6 +102,7 @@ class ItemService:
         if not db_item:
             return None
 
+        old_status = db_item.status
         if data.title is not None:
             db_item.title = data.title
         if data.description is not None:
@@ -99,9 +113,26 @@ class ItemService:
             db_item.status = data.status
         if data.priority is not None:
             db_item.priority = data.priority
+        if data.due_date is not None:
+            db_item.due_date = data.due_date
+        if data.tags is not None:
+            db_item.tags = data.tags
+        if data.assignee_id is not None:
+            db_item.assignee_id = data.assignee_id
+        if data.completed_at is not None:
+            db_item.completed_at = data.completed_at
+        if data.reminder_at is not None:
+            db_item.reminder_at = data.reminder_at
 
         self.db.commit()
         self.db.refresh(db_item)
+        
+        details = {}
+        if old_status != db_item.status:
+            details["old_status"] = old_status
+            details["new_status"] = db_item.status
+        self.log_activity(db_item.id, owner_id, "updated", details)
+        
         return db_item
 
     def delete_item(self, item_id: int, owner_id: Optional[int] = None, force: bool = False) -> bool:
@@ -111,11 +142,14 @@ class ItemService:
 
         if force:
             self.db.delete(db_item)
+            self.db.commit()
+            return True
         else:
             from datetime import datetime
             db_item.deleted_at = datetime.utcnow()
-        self.db.commit()
-        return True
+            self.db.commit()
+            self.log_activity(db_item.id, owner_id, "deleted")
+            return True
 
     def restore_item(self, item_id: int, owner_id: Optional[int] = None) -> bool:
         db_item = self.get_by_id(item_id, owner_id=owner_id, include_deleted=True)
@@ -124,7 +158,22 @@ class ItemService:
             
         db_item.deleted_at = None
         self.db.commit()
+        self.log_activity(db_item.id, owner_id, "restored")
         return True
+
+    def get_comments(self, item_id: int) -> List[ItemCommentDB]:
+        return self.db.query(ItemCommentDB).filter(ItemCommentDB.item_id == item_id).order_by(asc(ItemCommentDB.created_at)).all()
+
+    def add_comment(self, item_id: int, user_id: int, data: ItemCommentCreate) -> ItemCommentDB:
+        comment = ItemCommentDB(item_id=item_id, user_id=user_id, text=data.text)
+        self.db.add(comment)
+        self.db.commit()
+        self.db.refresh(comment)
+        self.log_activity(item_id, user_id, "commented")
+        return comment
+
+    def get_activity(self, item_id: int) -> List[ItemActivityDB]:
+        return self.db.query(ItemActivityDB).filter(ItemActivityDB.item_id == item_id).order_by(desc(ItemActivityDB.created_at)).all()
 
     def get_analytics(self, owner_id: Optional[int] = None) -> AnalyticsSummary:
         base_query = self.db.query(ItemDB)
