@@ -37,7 +37,12 @@ class Settings(BaseSettings):
 
     def get_database_url(self) -> str:
         if self.DATABASE_URL:
-            return self.DATABASE_URL
+            url = self.DATABASE_URL
+            if url.startswith("mysql://"):
+                url = url.replace("mysql://", "mysql+pymysql://", 1)
+            elif url.startswith("mariadb://"):
+                url = url.replace("mariadb://", "mysql+pymysql://", 1)
+            return url
 
         if self.MARIADB_HOST or os.getenv("MARIADB_HOST"):
             host = self.MARIADB_HOST or os.getenv("MARIADB_HOST")
