@@ -42,6 +42,13 @@ class Settings(BaseSettings):
                 url = url.replace("mysql://", "mysql+pymysql://", 1)
             elif url.startswith("mariadb://"):
                 url = url.replace("mariadb://", "mysql+pymysql://", 1)
+            
+            # Remove unsupported ssl-mode parameter for pymysql
+            if "?ssl-mode=" in url:
+                url = url.split("?ssl-mode=")[0]
+            elif "&ssl-mode=" in url:
+                url = url.replace("&ssl-mode=REQUIRED", "")
+                
             return url
 
         if self.MARIADB_HOST or os.getenv("MARIADB_HOST"):
