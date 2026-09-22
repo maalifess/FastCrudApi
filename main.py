@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import create_engine, Column, String, DateTime, Integer
+from sqlalchemy.orm import sessionmaker, declarative_base
 
 # Database setup
 DATABASE_URL = os.getenv("DATABASE_URL")
