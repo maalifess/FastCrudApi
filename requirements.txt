@@ -2,6 +2,14 @@ fastapi
 uvicorn
 sqlalchemy
 pydantic
+pydantic-settings
 pymysql
 cryptography
-
+alembic
+structlog
+passlib[bcrypt]
+python-jose[cryptography]
+slowapi
+python-multipart
+pytest
+httpx
