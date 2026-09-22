@@ -41,12 +41,17 @@ def run_migrations():
     import alembic.config
     from alembic import command
     import os
+    import sys
     try:
-        alembic_cfg = alembic.config.Config("alembic.ini")
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        alembic_ini_path = os.path.join(base_dir, "alembic.ini")
+        alembic_cfg = alembic.config.Config(alembic_ini_path)
+        # Ensure alembic can find the script_location
+        alembic_cfg.set_main_option("script_location", os.path.join(base_dir, "alembic"))
         command.upgrade(alembic_cfg, "head")
         print("Database migrations applied successfully.")
     except Exception as e:
-        print(f"Error applying migrations: {e}")
+        print(f"Error applying migrations: {e}", file=sys.stderr)
 
 # Exception handlers
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
