@@ -56,3 +56,9 @@ async def generic_exception_handler(request: Request, exc: Exception):
         message=f"An unexpected internal server error occurred: {str(exc)}",
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
     )
+
+def register_exception_handlers(app):
+    app.add_exception_handler(HTTPException, http_exception_handler)
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    app.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
+    app.add_exception_handler(Exception, generic_exception_handler)
