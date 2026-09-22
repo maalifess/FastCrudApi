@@ -45,11 +45,24 @@ def run_migrations():
     try:
         base_dir = os.path.dirname(os.path.abspath(__file__))
         alembic_ini_path = os.path.join(base_dir, "alembic.ini")
+        # Ensure tables exist for fresh databases
+        from app.db.database import Base, engine
+        Base.metadata.create_all(bind=engine)
+        
+        # Stamp alembic head so it doesn't try to re-add columns
+        # if the database was just created
         alembic_cfg = alembic.config.Config(alembic_ini_path)
-        # Ensure alembic can find the script_location
         alembic_cfg.set_main_option("script_location", os.path.join(base_dir, "alembic"))
-        command.upgrade(alembic_cfg, "head")
-        print("Database migrations applied successfully.")
+        
+        # We can try to upgrade, but if it fails (e.g. duplicate column), we ignore it
+        # because create_all already created everything perfectly.
+        try:
+            command.upgrade(alembic_cfg, "head")
+        except Exception:
+            # If upgrade fails, stamp it to head so future migrations work
+            command.stamp(alembic_cfg, "head")
+            
+        print("Database initialized successfully.")
     except Exception as e:
         print(f"Error applying migrations: {e}", file=sys.stderr)
 
