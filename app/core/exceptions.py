@@ -44,7 +44,7 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
         )
     return create_error_response(
         code="DATABASE_ERROR",
-        message="An unexpected database error occurred",
+        message=f"An unexpected database error occurred: {str(exc)}",
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
     )
 
