@@ -49,8 +49,10 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
     )
 
 async def generic_exception_handler(request: Request, exc: Exception):
+    import traceback
+    traceback.print_exc()
     return create_error_response(
         code="INTERNAL_SERVER_ERROR",
-        message="An unexpected internal server error occurred",
+        message=f"An unexpected internal server error occurred: {str(exc)}",
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
     )
