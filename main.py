@@ -63,18 +63,13 @@ def get_db():
         db.close()
 
 # Routes
-@app.get("/api/v1/items")
+@app.get("/api/v1/items", response_model=List[ItemResponse])
 def get_items():
+    db = SessionLocal()
     try:
-        db = SessionLocal()
-        try:
-            items = db.query(ItemDB).order_by(ItemDB.created_at.desc()).all()
-            return items
-        finally:
-            db.close()
-    except Exception as e:
-        import traceback
-        return {"error": str(e), "trace": traceback.format_exc(), "url": DATABASE_URL}
+        return db.query(ItemDB).order_by(ItemDB.created_at.desc()).all()
+    finally:
+        db.close()
 
 @app.post("/api/v1/items", response_model=ItemResponse)
 def create_item(item: ItemCreate):
