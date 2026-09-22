@@ -7,8 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import create_engine, Column, String, DateTime
-from sqlalchemy.orm import sessionmaker, Session, declarative_base
+from sqlalchemy import create_engine, Column, String, DateTime, Integer
 
 # Database setup
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -28,7 +27,7 @@ Base = declarative_base()
 # Models
 class ItemDB(Base):
     __tablename__ = "items"
-    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(Integer, primary_key=True, autoincrement=True)
     title = Column(String(255), nullable=False)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
@@ -40,7 +39,7 @@ class ItemUpdate(BaseModel):
     title: str
 
 class ItemResponse(BaseModel):
-    id: str
+    id: int
     title: str
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
@@ -84,7 +83,7 @@ def create_item(item: ItemCreate):
         db.close()
 
 @app.put("/api/v1/items/{item_id}", response_model=ItemResponse)
-def update_item(item_id: str, item: ItemUpdate):
+def update_item(item_id: int, item: ItemUpdate):
     db = SessionLocal()
     try:
         db_item = db.query(ItemDB).filter(ItemDB.id == item_id).first()
@@ -98,7 +97,7 @@ def update_item(item_id: str, item: ItemUpdate):
         db.close()
 
 @app.delete("/api/v1/items/{item_id}")
-def delete_item(item_id: str):
+def delete_item(item_id: int):
     db = SessionLocal()
     try:
         db_item = db.query(ItemDB).filter(ItemDB.id == item_id).first()
