@@ -36,6 +36,18 @@ app = FastAPI(
 # Attach limiter to app state for slowapi
 app.state.limiter = limiter
 
+@app.on_event("startup")
+def run_migrations():
+    import alembic.config
+    from alembic import command
+    import os
+    try:
+        alembic_cfg = alembic.config.Config("alembic.ini")
+        command.upgrade(alembic_cfg, "head")
+        print("Database migrations applied successfully.")
+    except Exception as e:
+        print(f"Error applying migrations: {e}")
+
 # Exception handlers
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_exception_handler(HTTPException, http_exception_handler)
