@@ -7,19 +7,13 @@ from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, String, Integer
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 
-# ====================================================================
-# 1. Database Configuration
-# ====================================================================
 
-# We get the database URL from the environment (e.g. from Vercel).
-# If it's not set, we default to a local SQLite file.
 db_url = os.getenv("DATABASE_URL", "sqlite:///./db.sqlite")
 
-# SQLAlchemy requires 'mysql+pymysql' instead of 'mysql' or 'mariadb'
+
 db_url = db_url.replace("mysql://", "mysql+pymysql://")
 db_url = db_url.replace("mariadb://", "mysql+pymysql://")
-db_url = db_url.split("?")[0]  # Remove extra connection arguments like ?ssl-mode=
-
+db_url = db_url.split("?")[0] 
 # Create the engine to talk to the database
 if "sqlite" in db_url:
     engine = create_engine(db_url, connect_args={"check_same_thread": False})
