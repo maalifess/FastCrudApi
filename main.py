@@ -1,79 +1,48 @@
 import os
-from typing import List
-from datetime import datetime
-from contextlib import asynccontextmanager
-
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, ConfigDict
-from sqlalchemy import create_engine, Column, String, DateTime, Integer
+from pydantic import BaseModel
+from sqlalchemy import create_engine, Column, String, Integer
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 
-# DB Setup
-db_url = os.getenv("DATABASE_URL", "sqlite:///./fastcrud.db")
-db_url = db_url.replace("mysql://", "mysql+pymysql://").replace("mariadb://", "mysql+pymysql://").split("?ssl-mode=")[0]
-engine = create_engine(db_url, connect_args={"check_same_thread": False} if "sqlite" in db_url else {})
+url = os.getenv("DATABASE_URL", "sqlite:///./db.sqlite").replace("mysql://", "mysql+pymysql://").replace("mariadb://", "mysql+pymysql://").split("?")[0]
+engine = create_engine(url, connect_args={"check_same_thread": False} if "sqlite" in url else {})
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
-# DB Model
-class ItemDB(Base):
+class Item(Base):
     __tablename__ = "items"
     id = Column(Integer, primary_key=True)
-    title = Column(String(255), nullable=False)
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    title = Column(String(255))
 
-# Schemas
-class ItemIn(BaseModel):
-    title: str
-
-class ItemOut(ItemIn):
-    id: int
-    created_at: datetime
-    model_config = ConfigDict(from_attributes=True)
-
-# App Setup
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
-    yield
-
-app = FastAPI(lifespan=lifespan)
+Base.metadata.create_all(bind=engine)
+app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 def get_db():
     db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    try: yield db
+    finally: db.close()
 
-# Routes
-@app.get("/api/v1/items", response_model=List[ItemOut])
-def get_items(db: Session = Depends(get_db)):
-    return db.query(ItemDB).order_by(ItemDB.created_at.desc()).all()
+class In(BaseModel): title: str
 
-@app.post("/api/v1/items", response_model=ItemOut)
-def create_item(item: ItemIn, db: Session = Depends(get_db)):
-    db_item = ItemDB(title=item.title)
-    db.add(db_item)
+@app.get("/api/v1/items")
+def _(db: Session = Depends(get_db)): return db.query(Item).order_by(Item.id.desc()).all()
+
+@app.post("/api/v1/items")
+def _(i: In, db: Session = Depends(get_db)):
+    db.add(item := Item(title=i.title))
     db.commit()
-    db.refresh(db_item)
-    return db_item
+    db.refresh(item)
+    return item
 
-@app.put("/api/v1/items/{item_id}", response_model=ItemOut)
-def update_item(item_id: int, item: ItemIn, db: Session = Depends(get_db)):
-    db_item = db.query(ItemDB).filter(ItemDB.id == item_id).first()
-    if not db_item: raise HTTPException(404, "Not found")
-    db_item.title = item.title
+@app.put("/api/v1/items/{id}")
+def _(id: int, i: In, db: Session = Depends(get_db)):
+    db.query(Item).filter(Item.id == id).update({"title": i.title})
     db.commit()
-    db.refresh(db_item)
-    return db_item
+    return db.query(Item).filter(Item.id == id).first()
 
-@app.delete("/api/v1/items/{item_id}")
-def delete_item(item_id: int, db: Session = Depends(get_db)):
-    db_item = db.query(ItemDB).filter(ItemDB.id == item_id).first()
-    if not db_item: raise HTTPException(404, "Not found")
-    db.delete(db_item)
+@app.delete("/api/v1/items/{id}")
+def _(id: int, db: Session = Depends(get_db)):
+    db.query(Item).filter(Item.id == id).delete()
     db.commit()
-    return {"status": "ok"}
