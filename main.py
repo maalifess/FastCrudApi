@@ -1,48 +1,129 @@
 import os
+from typing import List
+
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, String, Integer
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 
-url = os.getenv("DATABASE_URL", "sqlite:///./db.sqlite").replace("mysql://", "mysql+pymysql://").replace("mariadb://", "mysql+pymysql://").split("?")[0]
-engine = create_engine(url, connect_args={"check_same_thread": False} if "sqlite" in url else {})
+# ====================================================================
+# 1. Database Configuration
+# ====================================================================
+
+# We get the database URL from the environment (e.g. from Vercel).
+# If it's not set, we default to a local SQLite file.
+db_url = os.getenv("DATABASE_URL", "sqlite:///./db.sqlite")
+
+# SQLAlchemy requires 'mysql+pymysql' instead of 'mysql' or 'mariadb'
+db_url = db_url.replace("mysql://", "mysql+pymysql://")
+db_url = db_url.replace("mariadb://", "mysql+pymysql://")
+db_url = db_url.split("?")[0]  # Remove extra connection arguments like ?ssl-mode=
+
+# Create the engine to talk to the database
+if "sqlite" in db_url:
+    engine = create_engine(db_url, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(db_url)
+
+# Create a session factory
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
-class Item(Base):
+
+# ====================================================================
+# 2. Database Models (SQL Tables)
+# ====================================================================
+
+class ItemModel(Base):
+    """This represents the actual table in our database."""
     __tablename__ = "items"
+    
     id = Column(Integer, primary_key=True)
     title = Column(String(255))
 
-Base.metadata.create_all(bind=engine)
-app = FastAPI()
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+# Create the tables in the database if they don't exist
+Base.metadata.create_all(bind=engine)
+
+
+# ====================================================================
+# 3. Pydantic Models (Data Validation for API)
+# ====================================================================
+
+class ItemCreate(BaseModel):
+    """Data required to create a new item."""
+    title: str
+
+class ItemResponse(BaseModel):
+    """Data returned to the client when requesting an item."""
+    id: int
+    title: str
+
+    class Config:
+        from_attributes = True
+
+
+# ====================================================================
+# 4. FastAPI Setup
+# ====================================================================
+
+app = FastAPI()
+
+# Allow connections from any frontend (CORS)
+app.add_middleware(
+    CORSMiddleware, 
+    allow_origins=["*"], 
+    allow_methods=["*"], 
+    allow_headers=["*"]
+)
+
+# Helper function to get a database session and close it automatically
 def get_db():
     db = SessionLocal()
-    try: yield db
-    finally: db.close()
+    try:
+        yield db
+    finally:
+        db.close()
 
-class In(BaseModel): title: str
 
-@app.get("/api/v1/items")
-def _(db: Session = Depends(get_db)): return db.query(Item).order_by(Item.id.desc()).all()
+# ====================================================================
+# 5. API Routes (Endpoints)
+# ====================================================================
 
-@app.post("/api/v1/items")
-def _(i: In, db: Session = Depends(get_db)):
-    db.add(item := Item(title=i.title))
+@app.get("/api/v1/items", response_model=List[ItemResponse])
+def get_all_items(db: Session = Depends(get_db)):
+    """Fetch all items from the database."""
+    items = db.query(ItemModel).order_by(ItemModel.id.desc()).all()
+    return items
+
+
+@app.post("/api/v1/items", response_model=ItemResponse)
+def create_new_item(item_data: ItemCreate, db: Session = Depends(get_db)):
+    """Create a new item in the database."""
+    new_item = ItemModel(title=item_data.title)
+    
+    db.add(new_item)
     db.commit()
-    db.refresh(item)
-    return item
+    db.refresh(new_item)
+    
+    return new_item
 
-@app.put("/api/v1/items/{id}")
-def _(id: int, i: In, db: Session = Depends(get_db)):
-    db.query(Item).filter(Item.id == id).update({"title": i.title})
-    db.commit()
-    return db.query(Item).filter(Item.id == id).first()
 
-@app.delete("/api/v1/items/{id}")
-def _(id: int, db: Session = Depends(get_db)):
-    db.query(Item).filter(Item.id == id).delete()
+@app.put("/api/v1/items/{item_id}", response_model=ItemResponse)
+def update_existing_item(item_id: int, item_data: ItemCreate, db: Session = Depends(get_db)):
+    """Update the title of an existing item."""
+    db.query(ItemModel).filter(ItemModel.id == item_id).update({"title": item_data.title})
     db.commit()
+    
+    updated_item = db.query(ItemModel).filter(ItemModel.id == item_id).first()
+    return updated_item
+
+
+@app.delete("/api/v1/items/{item_id}")
+def delete_existing_item(item_id: int, db: Session = Depends(get_db)):
+    """Delete an item from the database."""
+    db.query(ItemModel).filter(ItemModel.id == item_id).delete()
+    db.commit()
+    
+    return {"status": "success"}
